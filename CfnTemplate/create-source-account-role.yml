@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create resources for automatic deployment of SPA'
+
+
+Parameters:
+  Env:
+    Type: String
+    Default: stg
+    AllowedValues:
+      - stg
+      - prd
+    Description: 'Set Enter Environment for SPA'
+
+  DeployAccountId:
+    Type: String
+    Default: 123456789012
+    AllowedValues:
+      - 123456789012
+      - 098765432109
+    Description: 'Set Enter Account ID to deploy SPA'
+
+  SourceAccountId:
+    Type: String
+    Default: 678901234567
+    Description: 'Set Enter Account ID for SPA source'
+  
+  SpaName:
+    Type: String
+    Default: my-app
+    AllowedValues:
+      - my-app
+      - my-app2
+    Description: 'Set Enter SPA name'
+
+Resources:
+# Create an IAM role to access codecommit
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${DeployAccountId}:root
+          Action: sts:AssumeRole 
+      Policies:
+        - PolicyName: !Sub ${Env}-auto-deploy-${SpaName}-for-codecommit
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement: 
+              - Effect: Allow
+                Action: 
+                  - s3:*
+                Resource: 
+                  - !Sub arn:aws:s3:::${Env}-auto-deploy-${SpaName}
+                  - !Sub arn:aws:s3:::${Env}-auto-deploy-${SpaName}/*
+              - Effect: Allow
+                Action:
+                  - kms:DescribeKey
+                  - kms:GenerateDataKey*
+                  - kms:Encrypt
+                  - kms:ReEncrypt*
+                  - kms:Decrypt
+                Resource: 
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:UploadArchive
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:CancelUploadArchive
+                Resource: 
+                  - !Sub arn:aws:codecommit:ap-northeast-1:${SourceAccountId}:${SpaName}
+      RoleName: !Sub ${Env}-auto-deploy-${SpaName}-for-codecommit
