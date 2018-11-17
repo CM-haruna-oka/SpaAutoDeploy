@@ -31,11 +31,46 @@ Parameters:
     Description: 'Set Enter branch name'
 
 Resources:
-  #codebuild用のIAMロールを作成
+  # create IAM role for pipeline
+  SpaPipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: codepipeline.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                 - !Sub arn:aws:s3:::${Env}-auto-deploy-${SpaName}
+                 - !Sub arn:aws:s3:::${Env}-auto-deploy-${SpaName}/*
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: 
+                  - '*'
+          PolicyName: !Sub ${Env}-auto-deploy-${SpaName}-for-pipeline
+      RoleName: !Sub ${Env}-auto-deploy-${SpaName}-for-pipeline
+  # create IAM role for codebuild project
   SpaCodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: codebuild.amazonaws.com
+          Action: sts:AssumeRole
       Policies:
         - PolicyDocument:
             Version: '2012-10-17'
@@ -44,13 +79,18 @@ Resources:
               Action:
               - logs:*
               - cloudfront:CreateInvalidation
-              Resource: *
+              Resource: '*'
             - Effect: Allow
               Action:
                - s3:*
-              Resource: *
+              Resource: '*'
         - PolicyName: !Sub ${Env}-auto-deploy-${SpaName}-for-codebuild
-    RoleName: !Sub ${Env}-auto-deploy-${SpaName}-for-codebuild
+      RoleName: !Sub ${Env}-auto-deploy-${SpaName}-for-codebuild
+  # Create artifact S3 bucket
+  SpaSourceS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${Env}-auto-deploy-${SpaName}
   SpaCodebuild:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -65,15 +105,15 @@ Resources:
       ServiceRole: !GetAtt SpaCodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
-        buildspec: !Sub codebuild/buildspec.${itg}.yml
+        buildspec: !Sub codebuild/buildspec.${Env}.yml
   SpaPipaline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       ArtifactStore:
         Type: S3
-        Location: !Sub ${Env}-${AutoDeployBucketName}
+        Location: !Sub ${Env}-auto-deploy-${SpaName}
       Name: !Sub ${Env}-auto-deploy-{SpaName}
-      RoleArn: !Sub arn:aws:iam::${DeployAccountId}:role/AWS-CodePipeline-Service
+      RoleArn: !GetAtt SpaPipelineRole.Arn
       Stages:
         Name: 'Source'
         Actions:
